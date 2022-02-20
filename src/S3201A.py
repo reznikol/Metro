@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+
+# Программа для чтения и анализа файла json, построения графа
+# и сохранения информации на диск с помощью модулей pickle и sqlite
+
 import json
 from os.path import join, abspath
 import pickle
 import sqlite3
 import os
 
+
+# Функция для совместного отображения названия станции и названия линии
 def station_name(id_st):
     try:
         st_text = stations[id_st]['name']
     except KeyError:
         st_text = f'<<< { id_st } >>>'
-    
-    try:    
+    try:
         lin_text = lines[stations[id_st]['line_id']]['name']
     except KeyError:
         lin_text = '?????????'
@@ -24,14 +29,11 @@ def station_name(id_st):
 jpath = abspath(join('..', 'Data', 'scheme.json'))
 print(jpath)
 
-#with open(jpath, 'rt', encoding='UTF8') as src:
-    #schema = json.loads(src.read())
-    
+# Открываем файл json на чтение и весь его перегружаем в переменную schema
 with open(jpath, 'rt', encoding='UTF8') as src:
     schema = json.load(src)
-    
-lines = {}
-# m - метро
+
+lines = {} # Создаем пустой словарь для линий и наполняем его информацией о линиях из переменной schema
 for m in schema['data']['lines']:
     lines[m['id']] = {
         'id': m['id'],
@@ -39,8 +41,8 @@ for m in schema['data']['lines']:
         'ordering': m['ordering'],
         'color': m['color'],
     }
-    
-stations = dict()
+
+stations = {} # Создаем пустой словарь для станций и наполняем его информацией о станциях из переменной schema
 for m in schema['data']['stations']:
     stations[m['id']] = {
         'id': m['id'],
@@ -50,7 +52,8 @@ for m in schema['data']['stations']:
         'perspective': m['perspective'],
         'color': lines[m['lineId']]['color'],
     }
-transitions = {}
+
+transitions = {} # Создаем пустой словарь для станций и наполняем его информацией о переходах из переменной schema
 for m in schema['data']['transitions']:
     transitions[m['id']]={
         'id': m['id'],
@@ -61,7 +64,7 @@ for m in schema['data']['transitions']:
         'length': m['pathLength']
     }
 
-connections = {}
+connections = {} # Создаем пустой словарь для станций и наполняем его информацией о пересадках из переменной schema
 for m in schema['data']['connections']:
     connections[m['id']] = {
         'id':m['id'],
@@ -71,56 +74,50 @@ for m in schema['data']['connections']:
         'perspective': m['perspective'],
         'bi': m['bi'],
     }
-    
-gr = {}
 
-for key in stations:
+gr = {} # Создаем граф
+
+for key in stations: # Вносим данные о станциях
     gr[key] = {'name': station_name(key)}
 
-for val in transitions.values():
+for val in transitions.values(): # Вносим данные о переходах
     id1, id2, ln12 = val['from_id'], val['to_id'], val['length']
     pers, bi = val['perspective'], val['bi']
     if (id1 in gr) and (id2 in gr) and (not pers) and bi:
         gr[id1][id2] = ln12
         gr[id2][id1] = ln12
 
-for val in connections.values():
+for val in connections.values(): # Вносим данные о пересадках
     id1, id2, ln12 = val['from_id'], val['to_id'], val['length']
-    pers, bi = val['perspective'], val['bi']
+    pers, bi = val['perspective'], val['bi'] # Если обе станции (по номерам id) существуют, построены и не являются перспективными
     if (id1 in gr) and (id2 in gr) and (not pers) and bi:
         gr[id1][id2] = ln12
         gr[id2][id1] = ln12    
 
-#проверка на наличие станций без названий
-
-#print(station_name(44))
-#print(station_name(176))
-#print(station_name(313))
-#print(station_name(515))
-
-#for n in range(550):
-    #print(f' n = {n} --> {station_name(n)}')
-    
 print('Все данные по станциям получены.')
 
-data_path = abspath(join('..', 'Data', 'scheme.pickle'))
+data_path = abspath(join('..', 'Data', 'scheme.pickle')) # Задаем путь для сохранения файла pickle
 print(data_path)
-with open(data_path, 'wb') as dst:
+
+with open(data_path, 'wb') as dst: # Открываем файл pickle обязательно в бинарном виде
     pickle.dump(gr, dst)
     pickle.dump(lines, dst)
     pickle.dump(stations, dst)
 print(f'Все данные сохранены в {data_path} файл.')
 
-base_path = abspath(join('..', 'Data', 'scheme.sqlite3'))
+base_path = abspath(join('..', 'Data', 'scheme.sqlite3')) # Задаем путь для сохранения файла sqlite3
 print(base_path)
-try:
+
+# Удаляем файл базы данных, если он существует
+try: 
     os.remove(base_path)
 except FileNotFoundError:
     pass
 
-con = sqlite3.connect(base_path)
+con = sqlite3.connect(base_path) # Подключаемся к базе данных (создаем пустой файл базы данных)
 cur = con.cursor()
 
+# Формируем запрос для создания структуры базы данных
 sql = '''
 CREATE TABLE gr(
     stn_id INTEGER PRIMARY KEY,
@@ -149,6 +146,8 @@ CREATE TABLE stations(
     perspective INTEGER
 );
 '''
+
+# Формируем структуру базы данных на основании запроса
 try:
     cur.executescript(sql)
 except sqlite3.DatabaseError as err:
@@ -156,6 +155,7 @@ except sqlite3.DatabaseError as err:
 else:
     print(f'База данных {base_path} успешно создана')
 
+# Подготавливаем данные для помещения в базу данных
 try:
     # Таблица gr
     for x in gr:
@@ -202,8 +202,6 @@ try:
 except sqlite3.DatabaseError as err:
     print(f'Ошибка №2: {err}')
 else:
-    con.commit()
+    con.commit()  # Непосредственно запись в базу
     print(f'Все запросы добавления данных успешно выполнены')
 con.close()
-
-print('END')
