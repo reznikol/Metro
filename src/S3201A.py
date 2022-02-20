@@ -29,7 +29,6 @@ def station_name(id_st):
 jpath = abspath(join('..', 'Data', 'scheme.json'))
 print(jpath)
 
-
 with open(jpath, 'rt', encoding='UTF8') as src: # Открываем файл json на чтение и весь его перегружаем в переменную schema
     schema = json.load(src)
 
